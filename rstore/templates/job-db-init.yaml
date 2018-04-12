@@ -1,0 +1,95 @@
+{{- if .Values.manifests.job_db_init }}
+{{- $envAll := . }}
+{{- $dependencies := .Values.dependencies.db_init }}
+{{- $mounts_rstore_db_init := .Values.pod.mounts.rstore_db_init.rstore_db_init }}
+{{- $mounts_rstore_db_init_init := .Values.pod.mounts.rstore_db_init.init_container }}
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rstore-db-init
+spec:
+  template:
+    metadata:
+      labels:
+{{ tuple $envAll "rstore" "db-init" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        {{ .Values.labels.node_selector_key }}: {{ .Values.labels.node_selector_value }}
+      initContainers:
+{{ tuple $envAll $dependencies $mounts_rstore_db_init_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+      containers:
+        - name: rstore-db-init
+          image: {{ .Values.images.tags.db_init | quote }}
+          imagePullPolicy: {{ .Values.images.pull_policy | quote }}
+{{ tuple $envAll $envAll.Values.pod.resources.jobs.db_init | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
+          env:
+            - name: RSTORE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_URI
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_NAME
+            - name: DB_SERVICE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_USERNAME
+            - name: DB_SERVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_PASSWORD
+            - name: DB_FQDN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_PORT
+            - name: DB_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.admin }}
+                  key: DATABASE_USERNAME
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.admin }}
+                  key: DATABASE_PASSWORD
+          command:
+            - /tmp/db-init.sh
+          volumeMounts:
+            - name: rstore-bin
+              mountPath: /tmp/db-init.sh
+              subPath: db-init.sh
+              readOnly: true
+            - name: etc-rstore
+              mountPath: /etc/retailstore
+            - name: rstore-etc
+              mountPath: /etc/retailstore/retailstore.conf
+              subPath: retailstore.conf
+              readOnly: true
+{{ if $mounts_rstore_db_init.volumeMounts }}{{ toYaml $mounts_rstore_db_init.volumeMounts | indent 10 }}{{ end }}
+      volumes:
+        - name: etc-rstore
+          emptyDir: {}
+        - name: rstore-etc
+          configMap:
+            name: rstore-etc
+            defaultMode: 0444
+        - name: rstore-bin
+          configMap:
+            name: rstore-bin
+            defaultMode: 0555
+{{ if $mounts_rstore_db_init.volumes }}{{ toYaml $mounts_rstore_db_init.volumes | indent 6 }}{{ end }}
+{{- end }}

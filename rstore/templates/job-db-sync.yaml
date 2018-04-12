@@ -1,0 +1,94 @@
+{{- if .Values.manifests.job_db_sync }}
+{{- $envAll := . }}
+{{- $dependencies := .Values.dependencies.db_sync }}
+{{- $mounts_rstore_db_sync := .Values.pod.mounts.rstore_db_sync.rstore_db_sync }}
+{{- $mounts_rstore_db_sync_init := .Values.pod.mounts.rstore_db_sync.init_container }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rstore-db-sync
+spec:
+  template:
+    metadata:
+      labels:
+{{ tuple $envAll "rstore" "db-sync" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        {{ .Values.labels.node_selector_key }}: {{ .Values.labels.node_selector_value }}
+      initContainers:
+{{ tuple $envAll $dependencies $mounts_rstore_db_sync_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+      containers:
+        - name: rstore-db-sync
+          image: {{ .Values.images.tags.db_sync | quote }}
+          imagePullPolicy: {{ .Values.images.pull_policy | quote }}
+{{ tuple $envAll $envAll.Values.pod.resources.jobs.db_sync | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
+          env:
+            - name: RSTORE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_URI
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_NAME
+            - name: DB_SERVICE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_USERNAME
+            - name: DB_SERVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_PASSWORD
+            - name: DB_FQDN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.user }}
+                  key: DATABASE_PORT
+            - name: DB_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.admin }}
+                  key: DATABASE_USERNAME
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresql.admin }}
+                  key: DATABASE_PASSWORD
+          command:
+            - /tmp/db-sync.sh
+          volumeMounts:
+            - name: retailstore-bin
+              mountPath: /tmp/db-sync.sh
+              subPath: db-sync.sh
+              readOnly: true
+            - name: etc-retailstore
+              mountPath: /etc/retailstore
+            - name: retailstore-etc
+              mountPath: /etc/retailstore/retailstore.conf
+              subPath: retailstore.conf
+              readOnly: true
+{{ if $mounts_rstore_db_sync.volumeMounts }}{{ toYaml $mounts_rstore_db_sync.volumeMounts | indent 10 }}{{ end }}
+      volumes:
+        - name: etc-retailstore
+          emptyDir: {}
+        - name: retailstore-etc
+          configMap:
+            name: retailstore-etc
+            defaultMode: 0444
+        - name: retailstore-bin
+          configMap:
+            name: retailstore-bin
+            defaultMode: 0555
+{{ if $mounts_rstore_db_sync.volumes }}{{ toYaml $mounts_rstore_db_sync.volumes | indent 6 }}{{ end }}
+{{- end }}

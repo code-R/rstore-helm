@@ -1,0 +1,34 @@
+helm init
+
+helm serve &
+
+make
+
+helm install --name=nfs-provisioner ./nfs-provisioner --namespace=openstack
+
+helm delete nfs-provisioner --purge
+
+helm delete postgresql --purge
+
+helm install --name=postgresql ./postgresql --namespace=openstack --set storage.pvc.enabled=false
+
+kubectl get pods --namespace openstack
+
+kubectl create -f ./postgres_svc.yaml --namespace openstack
+
+telnet 192.168.99.100 31000
+
+psql -U postgresql-admin -d postgres
+
+psql -U postgres -W -d postgresql -h 192.168.99.100 -p 31000
+
+192.168.99.100 31000
+
+postgresql://postgres:password@192.168.99.100:31000/retail_store
+
+helm install --name=rstore ./rstore --namespace=openstack --dry-run --debug > rstore.yaml
+
+helm del --purge rstore
+
+# To connect to a container through kubectl
+kubectl run -i -t test --image=postgres:9.5 /bin/bash

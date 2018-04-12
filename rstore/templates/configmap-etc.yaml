@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rstore-etc
+data:
+  deckhand.conf: |+
+{{ include "helm-toolkit.utils.to_oslo_conf" .Values.conf.deckhand | indent 4 }}
+  deckhand-paste.ini: |+
+{{ include "helm-toolkit.utils.to_ini" .Values.conf.paste | indent 4 }}

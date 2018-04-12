@@ -1,0 +1,391 @@
+[debug] Created tunnel using local port: '62504'
+
+[debug] SERVER: "127.0.0.1:62504"
+
+[debug] Original chart version: ""
+[debug] CHART PATH: /Users/vamsis/projects/kubes/store-helm/rstore
+
+NAME:   rstore2
+REVISION: 1
+RELEASED: Thu Apr 12 22:40:22 2018
+CHART: rstore-0.1.0
+USER-SUPPLIED VALUES:
+{}
+
+COMPUTED VALUES:
+affinity: {}
+conf:
+  paste:
+    app:store-api:
+      paste.app_factory: retailstore.server:api_app_factory
+    filter:auth:
+      paste.filter_factory: retailstore.util:auth_filter_factory
+    pipeline:main:
+      pipeline: auth store-api
+  rstore:
+    DEFAULT:
+      api_paste_config: retailstore-paste.ini
+      bind_host: 0.0.0.0
+      bind_port: 9000
+      some_default_option: 20
+    database:
+      database_connect_string: postgresql://postgres:password@192.168.99.100:31000/retail_store
+dependencies:
+  db_init:
+    services:
+    - endpoint: internal
+      service: postgresql
+  db_sync:
+    jobs:
+    - rstore-db-init
+    services:
+    - endpoint: internal
+      service: postgresql
+endpoints:
+  cluster_domain_suffix: cluster.local
+  postgresql:
+    auth:
+      admin:
+        password: password
+        username: postgres
+      user:
+        database: rstore
+        password: password
+        username: postgres
+    host_fqdn_override:
+      default: null
+    hosts:
+      default: postgresql
+    name: postgresql
+    path: /rstore
+    port:
+      postgresql:
+        default: 5432
+    scheme: postgresql+psycopg2
+  rstore:
+    host_fqdn_override:
+      default: null
+    hosts:
+      default: rstore-int
+      public: rstore-api
+    name: rstore
+    path:
+      default: /api/v1.0
+    port:
+      api:
+        default: 9000
+        public: 80
+    scheme:
+      default: http
+helm-toolkit:
+  endpoints:
+    fqdn: null
+  global:
+    region: cluster
+    tld: local
+image:
+  pullPolicy: IfNotPresent
+  repository: nginx
+  tag: stable
+images:
+  tags:
+    db_init: docker.io/postgres:9.5
+    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.0
+ingress:
+  annotations: {}
+  enabled: false
+  hosts:
+  - chart-example.local
+  path: /
+  tls: []
+labels:
+  node_selector_key: rstore
+  node_selector_value: enabled
+manifests:
+  job_db_init: true
+  secret_db: true
+nodeSelector: {}
+pod:
+  mounts:
+    rstore_db_init:
+      init_container: null
+      rstore_db_init: null
+  resources:
+    api:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    enabled: false
+    jobs:
+      db_init:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+replicaCount: 1
+resources: {}
+secrets:
+  postgresql:
+    admin: rstore-db-admin
+    user: rstore-db-user
+service:
+  port: 80
+  type: ClusterIP
+tolerations: []
+
+HOOKS:
+MANIFEST:
+
+---
+# Source: rstore/templates/secret-db.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rstore-db-admin
+type: Opaque
+data:
+  DATABASE_HOST: |-
+    cG9zdGdyZXNxbC5vcGVuc3RhY2suc3ZjLmNsdXN0ZXIubG9jYWw=
+  DATABASE_USERNAME: |-
+    cG9zdGdyZXM=
+  DATABASE_PASSWORD: |-
+    cGFzc3dvcmQ=
+  DATABASE_NAME: |-
+    
+  DATABASE_PORT: NTQzMg==
+  DATABASE_URI: |-
+    cG9zdGdyZXNxbCtwc3ljb3BnMjovL3Bvc3RncmVzOnBhc3N3b3JkQHBvc3RncmVzcWwub3BlbnN0YWNrLnN2Yy5jbHVzdGVyLmxvY2FsOjU0MzIvcnN0b3Jl
+...
+---
+# Source: rstore/templates/secret-db.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rstore-db-user
+type: Opaque
+data:
+  DATABASE_HOST: |-
+    cG9zdGdyZXNxbC5vcGVuc3RhY2suc3ZjLmNsdXN0ZXIubG9jYWw=
+  DATABASE_USERNAME: |-
+    cG9zdGdyZXM=
+  DATABASE_PASSWORD: |-
+    cGFzc3dvcmQ=
+  DATABASE_NAME: |-
+    cnN0b3Jl
+  DATABASE_PORT: NTQzMg==
+  DATABASE_URI: |-
+    cG9zdGdyZXNxbCtwc3ljb3BnMjovL3Bvc3RncmVzOnBhc3N3b3JkQHBvc3RncmVzcWwub3BlbnN0YWNrLnN2Yy5jbHVzdGVyLmxvY2FsOjU0MzIvcnN0b3Jl
+...
+---
+# Source: rstore/templates/configmap-bin.yaml
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rstore-bin
+data:
+  db-init.sh: |+
+    set -ex
+    export HOME=/tmp
+    
+    pgsql_superuser_cmd () {
+      DB_COMMAND="$1"
+    
+      PGPASSWORD=${PGPASSWORD} psql \
+      -h ${DB_FQDN} \
+      -p ${DB_PORT} \
+      -U ${DB_ADMIN_USER} \
+      --command="${DB_COMMAND}"
+    }
+    
+    # Create db
+    pgsql_superuser_cmd "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1 || pgsql_superuser_cmd "CREATE DATABASE $DB_NAME"
+    
+    # Create db user
+    pgsql_superuser_cmd "SELECT * FROM pg_roles WHERE rolname = '$DB_SERVICE_USER';" | tail -n +3 | head -n -2 | grep -q 1 || \
+        pgsql_superuser_cmd "CREATE ROLE ${DB_SERVICE_USER} LOGIN PASSWORD '$DB_SERVICE_PASSWORD';"
+    
+    # Grant permissions to user
+    pgsql_superuser_cmd "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME to $DB_SERVICE_USER;"
+    
+  db-sync.sh: |+
+    set -ex
+    
+    alembic upgrade head
+---
+# Source: rstore/templates/configmap-etc.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rstore-etc
+data:
+  deckhand.conf: |+
+    
+  deckhand-paste.ini: |+
+    [app:store-api]
+    paste.app_factory = retailstore.server:api_app_factory
+    [filter:auth]
+    paste.filter_factory = retailstore.util:auth_filter_factory
+    [pipeline:main]
+    pipeline = auth store-api
+---
+# Source: rstore/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rstore2
+  labels:
+    app: rstore
+    chart: rstore-0.1.0
+    release: rstore2
+    heritage: Tiller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: rstore
+    release: rstore2
+---
+# Source: rstore/templates/job-db-init.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rstore-db-init
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: rstore2
+        application: rstore
+        component: db-init
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        rstore: enabled
+      initContainers:
+        - name: init
+          image: quay.io/stackanetes/kubernetes-entrypoint:v0.3.0
+          imagePullPolicy: 
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:postgresql"
+            - name: DEPENDENCY_JOBS
+              value: ""
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD
+              value: ""
+            - name: COMMAND
+              value: "echo done"
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+            
+      containers:
+        - name: rstore-db-init
+          image: "docker.io/postgres:9.5"
+          imagePullPolicy: 
+          
+          env:
+            - name: RSTORE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_URI
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_NAME
+            - name: DB_SERVICE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_USERNAME
+            - name: DB_SERVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_PASSWORD
+            - name: DB_FQDN
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-user
+                  key: DATABASE_PORT
+            - name: DB_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-admin
+                  key: DATABASE_USERNAME
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rstore-db-admin
+                  key: DATABASE_PASSWORD
+          command:
+            - /tmp/db-init.sh
+          volumeMounts:
+            - name: rstore-bin
+              mountPath: /tmp/db-init.sh
+              subPath: db-init.sh
+              readOnly: true
+            - name: etc-rstore
+              mountPath: /etc/retailstore
+            - name: rstore-etc
+              mountPath: /etc/retailstore/retailstore.conf
+              subPath: retailstore.conf
+              readOnly: true
+
+      volumes:
+        - name: etc-rstore
+          emptyDir: {}
+        - name: rstore-etc
+          configMap:
+            name: rstore-etc
+            defaultMode: 0444
+        - name: rstore-bin
+          configMap:
+            name: rstore-bin
+            defaultMode: 0555

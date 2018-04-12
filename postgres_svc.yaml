@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql2
+spec:
+  ports:
+    - name: db
+      port: 5432
+      nodePort: 31000
+  selector:
+        release_group: postgresql2
+        application: postgresql
+        component: server
+  type : NodePort

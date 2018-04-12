@@ -1,0 +1,13 @@
+  PGPASSWORD=${PGPASSWORD} psql \
+  -h ${DB_FQDN} \
+  -p ${DB_PORT} \
+  -U ${DB_ADMIN_USER} \
+  --command="${DB_COMMAND}"
+
+export PGPASSWORD=password
+export DB_FQDN=postgresql.openstack.svc.cluster.local
+export DB_PORT=5432
+export DB_ADMIN_USER=postgres
+export DB_NAME=rstore
+export DB_SERVICE_USER=rstore
+export DB_SERVICE_PASSWORD=s3cr3t

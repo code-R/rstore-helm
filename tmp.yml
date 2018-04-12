@@ -1,0 +1,278 @@
+[debug] Created tunnel using local port: '58989'
+
+[debug] SERVER: "127.0.0.1:58989"
+
+[debug] Original chart version: ""
+[debug] CHART PATH: /Users/vamsis/projects/kubes/store-helm/postgresql
+
+NAME:   postgresql2
+REVISION: 1
+RELEASED: Thu Apr 12 15:56:06 2018
+CHART: postgresql-0.1.0
+USER-SUPPLIED VALUES:
+storage:
+  pvc:
+    enabled: false
+
+COMPUTED VALUES:
+dependencies:
+  static:
+    postgresql:
+      jobs: null
+endpoints:
+  cluster_domain_suffix: cluster.local
+  postgresql:
+    auth:
+      admin:
+        password: password
+        username: postgres
+    host_fqdn_override:
+      default: null
+    hosts:
+      default: postgresql
+    path: null
+    port:
+      postgresql:
+        default: 5432
+    scheme: postgresql
+helm-toolkit:
+  endpoints:
+    fqdn: null
+  global:
+    region: cluster
+    tld: local
+images:
+  pull_policy: IfNotPresent
+  tags:
+    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.0
+    postgresql: docker.io/postgres:9.5
+labels:
+  server:
+    node_selector_key: openstack-control-plane
+    node_selector_value: enabled
+manifests:
+  configmap_bin: true
+  secret_admin: true
+  service: true
+  statefulset: true
+pod:
+  affinity:
+    anti:
+      topologyKey:
+        default: kubernetes.io/hostname
+      type:
+        default: preferredDuringSchedulingIgnoredDuringExecution
+  replicas:
+    server: 1
+  resources:
+    enabled: false
+    server:
+      limits:
+        cpu: 2000m
+        memory: 1024Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+secrets:
+  postgresql:
+    admin: postgresql-admin
+storage:
+  host:
+    host_path: /data/openstack-helm/postgresql
+  mount:
+    path: /var/lib/postgresql/data
+    subpath: pgdata
+  pvc:
+    class_name: general
+    class_path: volume.beta.kubernetes.io/storage-class
+    enabled: false
+    size: 5Gi
+
+HOOKS:
+MANIFEST:
+
+---
+# Source: postgresql/templates/secret-admin.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-admin
+type: Opaque
+data:
+  POSTGRES_USER: cG9zdGdyZXM=
+  POSTGRES_PASSWORD: cGFzc3dvcmQ=
+---
+# Source: postgresql/templates/configmap-bin.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-bin
+data:
+  start.sh: |
+    #!/usr/bin/env bash
+    
+    
+    
+    set -ex
+    
+    exec /docker-entrypoint.sh postgres
+    
+  readiness.sh: |
+    #!/usr/bin/env bash
+    
+    
+    
+    set -ex
+    
+    pg_isready -U ${POSTGRES_USER}
+---
+# Source: postgresql/templates/statefulset.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgresql
+  namespace: openstack
+---
+# Source: postgresql/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  ports:
+    - name: db
+      port: 5432
+  selector:
+        release_group: postgresql2
+        application: postgresql
+        component: server
+---
+# Source: postgresql/templates/statefulset.yaml
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: postgresql
+spec:
+  serviceName: postgresql
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        release_group: postgresql2
+        application: postgresql
+        component: server
+    spec:
+      serviceAccountName: postgresql
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: release_group
+                  operator: In
+                  values:
+                    - postgresql2
+                - key: application
+                  operator: In
+                  values:
+                    - postgresql
+                - key: component
+                  operator: In
+                  values:
+                    - server
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        - name: init
+          image: quay.io/stackanetes/kubernetes-entrypoint:v0.3.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: ""
+            - name: DEPENDENCY_JOBS
+              value: ""
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD
+              value: ""
+            - name: COMMAND
+              value: "echo done"
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+            
+      containers:
+      - name: postgresql
+        image: docker.io/postgres:9.5
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+          - containerPort: 5432
+        env:
+          - name: 'POSTGRES_PASSWORD'
+            valueFrom:
+              secretKeyRef:
+                name: postgresql-admin
+                key: 'POSTGRES_PASSWORD'
+          - name: 'POSTGRES_USER'
+            valueFrom:
+              secretKeyRef:
+                name: postgresql-admin
+                key: 'POSTGRES_USER'
+          - name: 'PGDATA'
+            value: "/var/lib/postgresql/data"
+        command:
+          - /tmp/start.sh
+        livenessProbe:
+          exec:
+            command:
+              - /tmp/readiness.sh
+          initialDelaySeconds: 20
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+              - /tmp/readiness.sh
+          initialDelaySeconds: 20
+          timeoutSeconds: 5
+        volumeMounts:
+          - name: postgresql-bin
+            mountPath: /tmp/start.sh
+            subPath: start.sh
+            readOnly: true
+          - name: postgresql-bin
+            mountPath: /tmp/readiness.sh
+            subPath: readiness.sh
+            readOnly: true
+          - name: postgresql-data
+            mountPath: /var/lib/postgresql/data
+            subPath: pgdata
+      volumes:
+        - name: postgresql-bin
+          configMap:
+            name: postgresql-bin
+            defaultMode: 0555
+        - name: postgresql-data
+          hostPath:
+            path: /data/openstack-helm/postgresql
