@@ -1,0 +1,71 @@
+{{- if .Values.manifests.deployment }}
+{{- $envAll := . }}
+{{- $dependencies := .Values.dependencies.rstore }}
+{{- $mounts_rstore := .Values.pod.mounts.rstore.rstore }}
+{{- $mounts_rstore_init := .Values.pod.mounts.rstore.init_container }}
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: rstore
+spec:
+  replicas: {{ .Values.pod.replicas.rstore }}
+{{ tuple $envAll | include "helm-toolkit.snippets.kubernetes_upgrades_deployment" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $envAll "rstore-api" "server" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
+        configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
+    spec:
+      nodeSelector:
+        {{ .Values.labels.node_selector_key }}: {{ .Values.labels.node_selector_value }}
+      terminationGracePeriodSeconds: {{ .Values.pod.lifecycle.termination_grace_period.rstore.timeout | default "30" }}
+      restartPolicy: Always
+      initContainers:
+{{ tuple $envAll $dependencies $mounts_rstore_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+      containers:
+        - name: rstore
+          image: {{ .Values.images.tags.rstore }}
+          imagePullPolicy: {{ .Values.images.pull_policy }}
+{{ tuple $envAll $envAll.Values.pod.resources.api | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
+          ports:
+            - containerPort: {{ tuple "rstore" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /api/v1.0/health
+              port: {{ tuple "rstore" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /api/v1.0/health
+              port: {{ tuple "rstore" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: etc-rstore
+              mountPath: /etc/retailstore
+            - name: rstore-etc
+              mountPath: /etc/retailstore/retailstore.conf
+              subPath: retailstore.conf
+              readOnly: true
+            - name: rstore-etc
+              mountPath: /etc/retailstore/retailstore-paste.ini
+              subPath: retailstore-paste.ini
+              readOnly: true
+{{ if $mounts_rstore.volumeMounts }}{{ toYaml $mounts_rstore.volumeMounts | indent 12 }}{{ end }}
+      volumes:
+        - name: etc-rstore
+          emptyDir: {}
+        - name: rstore-etc
+          configMap:
+            name: rstore-etc
+            defaultMode: 0444
+{{ if $mounts_rstore.volumes }}{{ toYaml $mounts_rstore.volumes | indent 8 }}{{ end }}
+{{- end }}

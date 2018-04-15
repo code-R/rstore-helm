@@ -1,10 +1,12 @@
+#!/bin/bash
+
 set -ex
 export HOME=/tmp
 
 pgsql_superuser_cmd () {
   DB_COMMAND="$1"
 
-  PGPASSWORD=${PGPASSWORD} psql \
+  psql \
   -h ${DB_FQDN} \
   -p ${DB_PORT} \
   -U ${DB_ADMIN_USER} \

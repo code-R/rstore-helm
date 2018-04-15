@@ -6,13 +6,20 @@ labels:
   node_selector_key: rstore
   node_selector_value: enabled
 
-replicaCount: 1
+network:
+  ingress:
+    public: true
+  port: 9000
+  node_port: 31902
+  enable_node_port: true
 
 images:
   tags:
     dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.0
     db_init: docker.io/postgres:9.5
     db_sync: quay.io/code_r/rstore:latest
+    rstore: quay.io/code_r/rstore:latest
+  pull_policy: "IfNotPresent"
 
 image:
   repository: nginx
@@ -55,6 +62,8 @@ tolerations: []
 affinity: {}
 
 conf:
+  uwsgi:
+    timeout: 600
   paste:
     filter:auth:
       paste.filter_factory: retailstore.util:auth_filter_factory
@@ -69,7 +78,7 @@ conf:
       some_default_option: 20
       api_paste_config: retailstore-paste.ini
     database:
-      database_connect_string: postgresql://postgres:password@192.168.99.100:31000/retail_store
+      database_connect_string:
 
 dependencies:
   db_init:
@@ -79,6 +88,13 @@ dependencies:
   db_sync:
     jobs:
     - rstore-db-init
+    services:
+    - service: postgresql
+      endpoint: internal
+  rstore:
+    jobs:
+    - rstore-db-init
+    - rstore-db-sync
     services:
     - service: postgresql
       endpoint: internal
@@ -93,7 +109,29 @@ manifests:
   service: true
 
 pod:
+  lifecycle:
+    upgrades:
+      deployments:
+        revision_history: 3
+        pod_replacement_strategy: RollingUpdate
+        rolling_update:
+          max_unavailable: 1
+          max_surge: 3
+    termination_grace_period:
+      rstore:
+        timeout: 30
+  replicas:
+    rstore: 1
   mounts:
+    rstore_db_init:
+      init_container: null
+      rstore_db_init:
+    rstore_db_sync:
+      init_container: null
+      rstore_db_sync:
+    rstore:
+      init_container: null
+      rstore:
 
     rstore_db_init:
       init_container: null

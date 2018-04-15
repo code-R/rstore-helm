@@ -1,19 +1,27 @@
+{{- if .Values.manifests.service }}
+{{- $envAll := . }}
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "rstore.fullname" . }}
-  labels:
-    app: {{ template "rstore.name" . }}
-    chart: {{ template "rstore.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+  name: {{ tuple "rstore" "internal" . | include "helm-toolkit.endpoints.hostname_short_endpoint_lookup" }}
 spec:
-  type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    {{ if .Values.network.enable_node_port }}
+    - name: http
+      nodePort: {{ .Values.network.node_port }}
+      port: {{ .Values.network.port }}
       protocol: TCP
-      name: http
+      targetPort: {{ .Values.network.port }}
+    {{ else }}
+    - name: http
+      port: {{ .Values.network.port }}
+      protocol: TCP
+      targetPort: {{ .Values.network.port }}
+    {{ end }}
   selector:
-    app: {{ template "rstore.name" . }}
-    release: {{ .Release.Name }}
+{{ tuple $envAll "rstore-api" "server" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
+  {{ if .Values.network.enable_node_port }}
+  type: NodePort
+  {{ end }}
+{{- end }}
